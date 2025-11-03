@@ -41,6 +41,8 @@ class UserAdmin(BaseUserAdmin):
     readonly_fields = ['last_login']
 
 
-admin.site.register(models.Artifacts)
-admin.site.register(models.ArtifactImages)
-admin.site.register(models.ArtifactStatusLog)
+admin.site.register(models.Department)
+admin.site.register(models.Onboarding)
+admin.site.register(models.OnboardingNoteImages)
+admin.site.register(models.OnboardingStep)
+admin.site.register(models.Policy)

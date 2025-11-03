@@ -42,9 +42,9 @@ INSTALLED_APPS = [
     'drf_spectacular',
     'user',
     'core',
-    'artifacts',
+    'onboarding',
+    'policy',
     'corsheaders',
-    # 'django_extensions',
 ]
 
 MIDDLEWARE = [
@@ -85,10 +85,10 @@ WSGI_APPLICATION = 'app.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME': os.environ.get('DB_NAME'),
-        'HOST': os.environ.get('DB_HOST'),
-        'USER': os.environ.get('DB_USER'),
-        'PASSWORD': os.environ.get('DB_PASS')
+        'NAME':os.environ.get('DB_NAME'),
+        'HOST':os.environ.get('DB_HOST'),
+        'USER':os.environ.get('DB_USER'),
+        'PASSWORD':os.environ.get('DB_PASS')
     }
 }
 
@@ -149,13 +149,6 @@ CORS_ALLOWED_WHITELIST = [
 REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
 }
-
-
-# DEFAULT_PERMISSIONS_CLASSES = [
-#     'rest_framework.permissions.IsAuthenticated',
-# AllowAny
-# IsAdminUser
-# IsAuthenticatedReadOnly
 
 # Allows to upload images through the browsable interface
 SPECTACULAR_SETTINGS = {

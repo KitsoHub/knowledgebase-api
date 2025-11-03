@@ -23,7 +23,7 @@ services:
       - DJANGO_SETTINGS_MODULE=app.settings
     depends_on:
       - db
-
+    user: django-user
   db:
     image: postgres:13-alpine
     volumes:

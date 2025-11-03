@@ -5,7 +5,7 @@ import uuid
 from core import models
 from PIL import Image
 import tempfile
-
+import datetime
 
 def create_user(**params):
     return get_user_model().objects.create_user(**params)
@@ -23,8 +23,10 @@ def image_path(instance, filename):
 
     ext = os.path.splitext(filename)[1]
     filename = f'{uuid.uuid4()}{ext}'
-    if type(instance) == models.Artifacts:
-        class_name = 'artifact'
+    if type(instance) == models.Onboarding:
+        class_name = 'onboarding_notes'
+    elif type(instance) == models.OnboardingStep:
+        class_name = 'onboarding_step_notes'
     else:
         class_name = 'test'
 
@@ -40,3 +42,14 @@ def get_image():
     _file = open(file.name, 'rb')
 
     return _file
+
+def document_path(instance, filename):
+    """Generate a path for instance documents"""
+    class_name = 'documents'
+    ext = os.path.splitext(filename)[1]
+    dt = datetime.datetime.now()
+    milliseconds = dt.strftime('%f')[:-4]
+    dt = dt.strftime('%Y-%m-%dT%H:%M:%S')
+    filename = f'{uuid.uuid4()}{dt}{milliseconds}{ext}'
+
+    return os.path.join('uploads', class_name, filename)

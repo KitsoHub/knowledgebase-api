@@ -1,9 +1,9 @@
 from django.apps import AppConfig
 
 
-class ArtifactsConfig(AppConfig):
+class OnboardingConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
-    name = 'artifacts'
+    name = 'onboarding'
 
     def ready(self):
-        import artifacts.signals
+        import onboarding.signals

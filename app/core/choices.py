@@ -1,18 +1,5 @@
 from django.utils.translation import gettext_lazy as _
 
-EVENT_TYPE_CHOICES = (
-        ('traditional', _('Traditional')),
-        ('festive', 'Festive'),
-        ('ritual', 'Ritual')
-    )
-
-CHIEF_TYPE = (
-        ('paramount', 'Paramount'),
-        ('subchief', 'Sub Chief'),
-        ('divisional', 'Divisional')
-    )
-
-
 DOCUMENT_TYPE = (
         ('article', 'Article'),
         ('conference_paper', 'Conference paper'),
@@ -21,15 +8,11 @@ DOCUMENT_TYPE = (
         ('chapter', 'Chapter'),
     )
 
-SITE_TYPE = (
-    ('cultural', 'Cultural'),
-    ('natural', 'Natural'),
-)
 
-ARTIFACT_TYPE = (
-    ('clothing', 'Clothing'),
-    ('jewelry', 'Jewelry'),
-    ('tool', 'Tool'),
+ONBOARDING_TYPE = (
+    ('operations', 'Operational'),
+    ('leave', 'Leave taking'),
+    ('training', 'Training'),
     ('other', 'Other'),
 )
 
@@ -39,3 +22,10 @@ STATUS_CHOICES = (
         ('verified', _('Verified')),
         ('published', _('Published')),
     )
+
+KNOWLEDGE_CATEGORY = (
+    ('onboarding', _('Onboarding')),
+    ('policy', _('Policy')),
+    ('procedure', _('Procedure')),
+    ('compliance', _('Compliance')),
+    ('general', _('General')))

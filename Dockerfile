@@ -1,35 +1,66 @@
-FROM python:3.9-alpine3.13
-LABEL maintainer="samKenpachi011"
 
-ENV PYTHONNUNBUFFERED 1
+# ----------------------------
+# Stage 1: Builder
+# ----------------------------
+FROM python:3.9-slim-bullseye as builder
 
-COPY ./requirements.txt /tmp/requirements.txt
-COPY ./requirements.dev.txt /tmp/requirements.dev.txt
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1
+
 COPY ./app /app
 WORKDIR /app
-EXPOSE 8000
 
-ARG DEV=false
-RUN python -m venv /pyapi && \
-    /pyapi/bin/pip install --upgrade pip && \
-    apk add --update --no-cache postgresql-client jpeg-dev && \
-    apk add --update --no-cache --virtual .tmp-build-deps \
-    build-base postgresql-dev musl-dev zlib zlib-dev linux-headers && \
-    /pyapi/bin/pip install -r /tmp/requirements.txt && \
-    if [ $DEV = "true" ]; \
-    then /pyapi/bin/pip install -r /tmp/requirements.dev.txt ; \
-    fi && \
-    rm -rf /tmp && \
-    apk del .tmp-build-deps && \
-    adduser \
-    --disabled-password \
-    --no-create-home \
-    django-user && \
-    mkdir -p /vol/web/media && \
-    mkdir -p /vol/web/static && \
+# Install system dependencies
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    python3-dev \
+    libpq-dev \
+    libjpeg-dev \
+    zlib1g-dev \
+    libopenjp2-7-dev
+
+COPY requirements.txt .
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --user --no-warn-script-location -r requirements.txt
+# ----------------------------
+# Stage 2: Runtime
+# ----------------------------
+FROM python:3.9-slim-bullseye
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PATH="/home/django-user/.local/bin:$PATH" \
+    PYTHONPATH="/app"
+
+# Create non-root user
+RUN groupadd -g 1000 django-user && \
+    useradd -u 1000 -g django-user -d /home/django-user django-user && \
+    mkdir -p /home/django-user/app && \
+    mkdir -p /vol/web/media /vol/web/static && \
     chown -R django-user:django-user /vol && \
     chmod -R 755 /vol
 
-ENV PATH="/pyapi/bin:$PATH"
+# Install runtime dependencies
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    apt-get update && \
+    apt-get install -y --no-install-recommends \
+    libpq5 \
+    libjpeg62 \
+    zlib1g && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 USER django-user
+WORKDIR /app
+
+# Copy installed dependencies
+COPY --from=builder --chown=django-user:django-user /root/.local /home/django-user/.local
+
+# Copy application code
+COPY --chown=django-user:django-user . .
+
+EXPOSE 8000

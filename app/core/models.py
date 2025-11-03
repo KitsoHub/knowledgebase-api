@@ -6,8 +6,8 @@ from django.contrib.auth.models import (
 from django.conf import settings
 from .managers import UserManager
 from .choices import (
-    ARTIFACT_TYPE, STATUS_CHOICES)
-from .helpers import image_path
+    DOCUMENT_TYPE, ONBOARDING_TYPE, STATUS_CHOICES, KNOWLEDGE_CATEGORY)
+from .helpers import document_path, image_path
 
 
 class User(AbstractBaseUser, PermissionsMixin):
@@ -29,153 +29,224 @@ class User(AbstractBaseUser, PermissionsMixin):
     def __str__(self) -> str:
         return self.email
 
-# Artifacts
+
+class Department(models.Model):
+    dept_name = models.CharField(max_length=100)
+    description = models.TextField()
+    mission = models.TextField()
+    goals = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f'{self.dept_name} Department'
+
+    class Meta:
+        verbose_name = 'Department'
+        verbose_name_plural = 'Departments'
 
 
-class ArtifactStatus(models.TextChoices):
+class Onboarding(models.Model):
+    onboarding_name = models.CharField(max_length=100)
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,
+    )
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='department',
+        null=True, blank=True)
+    onboarding_type = models.CharField(
+        max_length=50,
+        choices=ONBOARDING_TYPE,
+        default='test',
+        help_text="Verification status",
+    )
+    notes = models.TextField()
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default='draft',
+        help_text="Verification status",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f'{self.user.email} {self.status}'
+
+    class Meta:
+        verbose_name = 'OnboardingNote'
+        verbose_name_plural = 'OnboardingNotes'
+
+
+class OnboardingStatus(models.TextChoices):
     DRAFT = 'draft', 'Draft'
     VETTING = 'vetting', 'Vetting'
     VERIFIED = 'verified', 'Verified'
     PUBLISHED = 'published', 'Published'
 
 
-class Artifacts(models.Model):
-    """Class representing artifacts"""
+class OnboardingNoteImages(models.Model):
+    """Class representing onboarding images"""
 
-    artifact_name = models.CharField(max_length=100)
-    user = models.ForeignKey(
-        settings.AUTH_USER_MODEL,
-        null=True,
-        on_delete=models.SET_NULL
-    )
-    artifact_type = models.CharField(max_length=100, choices=ARTIFACT_TYPE)
-    description = models.TextField(blank=True)
-    historical_significance = models.PositiveIntegerField(
-        default=1, blank=True, null=True)
-    cultural_significance = models.PositiveIntegerField(
-        default=1, blank=True, null=True)
-    submission_date = models.DateField(auto_now_add=True)
-    vetted_date = models.DateField(blank=True, null=True)
-    verification_date = models.DateField(blank=True, null=True)
-    vetted_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, related_name='vetted_by', blank=True,
-        null=True, on_delete=models.SET_NULL)
-    verified_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, related_name='verified_by', blank=True,
-        null=True, on_delete=models.SET_NULL)
-    published_by = models.ForeignKey(
-        settings.AUTH_USER_MODEL, related_name='published_by', blank=True,
-        null=True, on_delete=models.SET_NULL)
-    status = models.CharField(
-        max_length=10,
-        choices=STATUS_CHOICES,
-        default=ArtifactStatus.DRAFT,
-        help_text="Verification status",
-    )
-    published_date = models.DateField(blank=True, null=True)
-
-    def __str__(self) -> str:
-        return self.artifact_name
-
-    def save(self, *args, **kwargs):
-        # add transition handler
-        # initial_status = Artifacts.objects.get(pk=self.pk).status
-        # if self.status == 'published' and initial_status == 'draft':
-        #     raise ValueError(
-        #         'Cannot transition directly from draft to published.')
-        # Check if this is an update to an existing record
-        if not self.pk:
-            # New object: Create a log entry for the initial status
-            if self.status == 'published':
-                raise ValueError(
-                    'Cannot transition directly from draft to published.')
-
-            super().save(*args, **kwargs)  # Save the object to assign a primary key
-            ArtifactStatusLog.objects.create(
-                artifact=self,
-                previous_status=None,
-                new_status=self.status,
-                changed_by=self.user,
-            )
-            return
-        else:
-            # Existing object: Validate status transitions
-            old_status = Artifacts.objects.get(pk=self.pk).status
-            changed_by = kwargs.pop('changed_by', None)
-
-            # Log the status change if it actually changes
-            if old_status != self.status:
-                valid_transitions = {
-                    ArtifactStatus.DRAFT: [ArtifactStatus.DRAFT,
-                                           ArtifactStatus.VETTING],
-                    ArtifactStatus.VETTING: [ArtifactStatus.VERIFIED],
-                    ArtifactStatus.VERIFIED: [ArtifactStatus.PUBLISHED],
-                    ArtifactStatus.PUBLISHED: [],
-                }
-
-            # Check if the new status is a valid transition
-                if self.status not in valid_transitions.get(old_status, []):
-                    raise ValueError(f"Invalid status transition from \
-                        {old_status} to {self.status}.")
-                if self.status == ArtifactStatus.VETTING:
-                    changed_by = self.vetted_by
-                elif self.status == ArtifactStatus.VERIFIED:
-                    changed_by = self.verified_by
-                elif self.status == ArtifactStatus.PUBLISHED:
-                    changed_by = self.published_by
-
-                ArtifactStatusLog.objects.create(
-                    artifact=self,
-                    previous_status=old_status,
-                    new_status=self.status,
-                    changed_by=changed_by,
-                )
-        super().save(*args, **kwargs)
-
-    class Meta:
-        verbose_name = "Artifacts"
-        verbose_name_plural = "Artifacts"
-
-# add verifier registrations
-# add publisher registrations
-
-
-class ArtifactImages(models.Model):
-    """Class representing artifact images"""
-
-    artifact = models.ForeignKey(
-        Artifacts,
+    note = models.ForeignKey(
+        Onboarding,
         related_name='images',
         on_delete=models.CASCADE,
         blank=True, null=True)
     images = models.ImageField(null=True, upload_to=image_path)
 
     def __str__(self) -> str:
-        return self.artifact.artifact_name
+        return self.note.onboarding_name
 
     class Meta:
-        verbose_name = "Artifact Images"
-        verbose_name_plural = "Artifact Images"
-
-# Artifact status log
+        verbose_name = "Onboarding Notes Images"
+        verbose_name_plural = "Onboarding Notes Images"
 
 
-class ArtifactStatusLog(models.Model):
-    artifact = models.ForeignKey(
-        'Artifacts', on_delete=models.CASCADE, related_name='status_logs')
-    previous_status = models.CharField(
-        max_length=50, choices=ArtifactStatus.choices, null=True)
-    new_status = models.CharField(
-        max_length=50, choices=ArtifactStatus.choices)
-    changed_by = models.ForeignKey(
-        'User', on_delete=models.SET_NULL, null=True)
-    timestamp = models.DateTimeField(auto_now_add=True)
+# TODO: add onboarding steps for a particular onaboarding
+class OnboardingStep(models.Model):
+    """Class for onboarding steps"""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL,)
+    onboarding = models.ForeignKey(
+        Onboarding, related_name='onboardingstep',
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True)
+    step_title = models.CharField(max_length=100)
+    step_description = models.TextField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self):
+        return f"{self.step_title}"
+
+
+class OnboardingStepImages(models.Model):
+    """Class representing onboarding images"""
+
+    step = models.ForeignKey(
+        OnboardingStep,
+        related_name='images',
+        on_delete=models.CASCADE,
+        blank=True, null=True)
+    images = models.ImageField(null=True, upload_to=image_path)
 
     def __str__(self) -> str:
-
-        return f"{self.artifact.artifact_name}: \
-            {self.previous_status} -> {self.new_status}"
+        return self.step.step_title
 
     class Meta:
-        verbose_name = "Artifact Status Log"
-        verbose_name_plural = "Artifact Status Log"
+        verbose_name = "Onboarding Step Images"
+        verbose_name_plural = "Onboarding Step Images"
+
+# TODO: add policies
+
+
+class Policy(models.Model):
+    """Class representing policies"""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL
+    )
+    title = models.CharField(max_length=200)
+    description = models.TextField()
+    version = models.CharField(
+        max_length=20, default='v1.0', blank=True, null=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='created_policies',
+        null=True, blank=True)
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='policy_department',
+        null=True, blank=True)
+    approved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, related_name='approved_policies',
+        null=True, blank=True)
+    document_type = models.CharField(
+        max_length=100,
+        blank=True,
+        choices=DOCUMENT_TYPE)
+    document = models.FileField(upload_to=document_path,
+                                null=True, blank=True)
+    is_published = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default='draft',
+        help_text="Verification status",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f'{self.title} {self.document_type} {self.version}'
+
+    class Meta:
+        verbose_name = "Policies"
+        verbose_name_plural = "Policies"
+
+
+# TODO: add compliance
+# TODO: add knowledge base
+class KnowledgeBase(models.Model):
+    """Class representing policies"""
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        on_delete=models.SET_NULL
+    )
+    knowledge_title = models.CharField(max_length=200)
+    content = models.TextField()
+    version = models.CharField(
+        max_length=20, default='v1.0', blank=True, null=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='created_knowledge',
+        null=True, blank=True)
+    department = models.ForeignKey(
+        Department,
+        on_delete=models.CASCADE,
+        related_name='knowledge_department',
+        null=True, blank=True)
+    verified_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, related_name='verified_knowledge',
+        null=True, blank=True)
+    published_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, related_name='published_knowledge',
+        null=True, blank=True)
+    knowledge_category = models.CharField(
+        max_length=100,
+        blank=True,
+        choices=KNOWLEDGE_CATEGORY, default='general')
+    document_type = models.CharField(
+        max_length=100,
+        blank=True,
+        choices=DOCUMENT_TYPE)
+    document = models.FileField(upload_to=document_path,
+                                null=True, blank=True)
+    is_verified = models.BooleanField(default=False)
+    is_published = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=10,
+        choices=STATUS_CHOICES,
+        default='draft',
+        help_text="Verification status",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return f'{self.title} {self.document_type} {self.version}'
+
+    class Meta:
+        verbose_name = "Knowledge Base"
+        verbose_name_plural = "Knowledge Base"

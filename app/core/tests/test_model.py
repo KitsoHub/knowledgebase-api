@@ -42,71 +42,70 @@ class ModelTests(TestCase):
         self.assertTrue(user.is_staff)
         self.assertTrue(user.is_superuser)
 
-    def test_create_artifact_success(self):
-        """Test creating artifacts model"""
+    def test_create_onboarding_success(self):
+        """Test creating Onboarding model"""
 
         user = create_user(
             email='test@example.com',
             password='testpass123'
         )
-        # TODO: add relation to culture, site, ethnic group
-        artifact = models.Artifacts.objects.create(
+
+        self.department = models.Department.objects.create(
+            dept_name="HR Department")
+        onboarding = models.Onboarding.objects.create(
             user=user,
-            artifact_name='Test Artifact',
-            artifact_type='tool',
-            description='Test Artifact Description',
-            historical_significance=5.0,
-            cultural_significance=5.0,
-            submission_date='2024-10-10',
-            status='pending',
+            notes='Test Onboarding',
+            onboarding_type='operations',
+            created_at='2024-10-10',
+            updated_at='2024-10-10',
+            status='draft',
 
         )
 
-        self.assertEqual(str(artifact), artifact.artifact_name)
+        self.assertEqual(str(onboarding),
+                         f'{onboarding.user} {onboarding.status}')
 
 # Images
-    def test_create_artifact_imgs(self):
-        """Test creating artifact images"""
+    def test_create_onboarding_imgs(self):
+        """Test creating onboarding images"""
 
         user = create_user(
             email='test@example.com',
             password='testpass123'
         )
 
-        self.artifact_data = models.Artifacts.objects.create(
+        self.onboarding_data = models.Onboarding.objects.create(
             user=user,
-            artifact_name='Test Artifact Images',
-            artifact_type='tool',
-            description='Test Artifact Description Images',
+            onboarding_name='Test Onboarding Images',
+            onboarding_type='tool',
         )
 
-        artifact_imgs = models.ArtifactImages.objects.create(
-            artifact=self.artifact_data,
-            images='artifact_example.jpg'
+        onboarding_imgs = models.OnboardingNoteImages.objects.create(
+            note=self.onboarding_data,
+            images='onboarding_example.jpg'
         )
-        path = '/vol/web/media/artifact_example.jpg'
-        self.assertEqual(artifact_imgs.artifact, self.artifact_data)
-        self.assertEqual(artifact_imgs.images.path, f'{path}')
-
-    def test_create_artifact_status_log(self):
-        """Test creating artifacts status log model"""
+        path = '/vol/web/media/onboarding_example.jpg'
+        self.assertEqual(onboarding_imgs.note, self.onboarding_data)
+        self.assertEqual(onboarding_imgs.images.path, f'{path}')
+    def test_create_policy_success(self):
+        """Test creating Policy model"""
 
         user = create_user(
             email='test@example.com',
             password='testpass123'
         )
-        # TODO: add relation to culture, site, ethnic group
-        artifact = models.Artifacts.objects.create(
-            user=user,
-            artifact_name='Test Artifact',
-            artifact_type='tool',
-            description='Test Artifact Description',
-            historical_significance=5.0,
-            cultural_significance=5.0,
-            submission_date='2024-10-10',
-            status='pending',
+        department = models.Department.objects.create(
+            dept_name="HR Department")
 
+        policy = models.Policy.objects.create(
+            user=user,
+            title='Test Policy',
+            description='This is a test policy description.',
+            created_by=user,
+            department=department,
+            document_type='article'
         )
 
-        logs = models.ArtifactStatusLog.objects.filter(artifact=artifact.id)
-        self.assertEqual(len(logs), 1)
+        self.assertEqual(policy.title, 'Test Policy')
+        self.assertEqual(policy.created_by.email, user.email)
+        self.assertEqual(models.Policy.objects.all().count(), 1)

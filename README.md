@@ -34,3 +34,12 @@
 - app/knowledgebase/serializers
 - app/knowledgebase/apps
 - app/knowledgebase/views
+
+
+2. ### Set Up
+| Syntax | Description |
+| ----------- | ----------- |
+| `docker build .`  | Build the image using the docker file |
+| `docker-compose build`  | Build the image using docker compose configurations |
+| `docker-compose run --rm app sh -c "python3 manage.py createsuperuser" `  | Creating a super user eg (admin123) |
+| `docker-compose up`  | Start all the services |

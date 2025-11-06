@@ -1,13 +1,17 @@
 from django.db import models
 from django.contrib.auth.models import (
     AbstractBaseUser,
-    PermissionsMixin, AbstractUser
+    PermissionsMixin
 )
 from django.conf import settings
 from .managers import UserManager
 from .choices import (
-    DOCUMENT_TYPE, ONBOARDING_TYPE, STATUS_CHOICES, KNOWLEDGE_CATEGORY)
+    DOCUMENT_TYPE, KNOWLEDGE_CATEGORY,
+    ONBOARDING_TYPE, SITES_CATEGORY_CHOICES,
+    SITES_SENSITIVITY_LEVELS, STATUS_CHOICES, VOTE_CHOICES, SITES_STATUS_CHOICES)
 from .helpers import document_path, image_path
+from django.db.models import Count
+from django.core.validators import MinValueValidator, MaxValueValidator
 
 
 class User(AbstractBaseUser, PermissionsMixin):
@@ -250,3 +254,243 @@ class KnowledgeBase(models.Model):
     class Meta:
         verbose_name = "Knowledge Base"
         verbose_name_plural = "Knowledge Base"
+
+
+class SiteMetadata(models.Model):
+    """Separate metadata model for better querying and validation"""
+
+    unesco = models.BooleanField(default=False)
+    undp = models.BooleanField(default=False)
+    unicef = models.BooleanField(default=False)
+    local_context = models.TextField(blank=True)
+    indigenous_system = models.CharField(max_length=255, blank=True)
+    rights = models.TextField(blank=True)
+    ip_metadata = models.TextField(blank=True)
+    sensitivity_level = models.CharField(
+        max_length=20,
+        choices=SITES_SENSITIVITY_LEVELS,
+        default='public'
+    )
+    access_protocol = models.TextField(blank=True)
+
+
+# Heritage Sites Model
+
+
+class SiteSettings(models.Model):
+    """Global settings for site verification system"""
+
+    required_verifier_count = models.PositiveIntegerField(
+        default=2,
+        help_text="Number of verifier votes required to change status"
+    )
+    verifiers = models.ManyToManyField(
+        User,
+        related_name='verifier_settings',
+        limit_choices_to={'groups__name': 'verifiers'},
+        help_text="Users who can verify sites"
+    )
+
+    # Singleton pattern - only one settings instance
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    def delete(self, *args, **kwargs):
+        pass
+
+    @classmethod
+    def load(cls):
+        obj, created = cls.objects.get_or_create(pk=1)
+        return obj
+
+    class Meta:
+        verbose_name = "Site Settings"
+        verbose_name_plural = "Site Settings"
+
+
+class SiteQuerySet(models.QuerySet):
+    """ Custom QuerySet for Heritage Sites """
+
+    def pending(self):
+        return self.filter(status='pending')
+
+    def verified(self):
+        return self.filter(status='verified')
+
+    def rejected(self):
+        return self.filter(status='rejected')
+
+    def awaiting_verification(self):
+        return self.filter(status='pending').annotate(
+            vote_count=Count('site_verification_vote')
+        ).filter(
+            vote_count__lt=models.F(
+                'site_settings__required_verifier_count'
+            ))
+
+    def by_category(self, category):
+        return self.filter(category=category)
+
+    def public_sites(self):
+        return self.filter(sensitivity_level='public')
+
+
+class SiteManager(models.Manager):
+    """Custom manager for Site model"""
+
+    def get_queryset(self):
+        return SiteQuerySet(self.model, using=self._db)
+
+    def pending(self):
+        return self.get_queryset().pending()
+
+    def verified(self):
+        return self.get_queryset().verified()
+
+    def rejected(self):
+        return self.get_queryset().rejected()
+
+    def awaiting_verification(self):
+        return self.get_queryset().awaiting_verification()
+
+
+class HeritageSite(models.Model):
+    site_name = models.CharField(max_length=255)
+    description = models.TextField()
+    status = models.CharField(
+        max_length=20,
+        choices=SITES_STATUS_CHOICES,
+        default='pending'
+    )
+    category = models.CharField(max_length=20, choices=SITES_CATEGORY_CHOICES)
+
+    # TODO: For production GeoDjango: PointField, PolygonField, LineStringField
+    latitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        validators=[MinValueValidator(-90), MaxValueValidator(90)]
+    )
+    longitude = models.DecimalField(
+        max_digits=9,
+        decimal_places=6,
+        validators=[MinValueValidator(-180), MaxValueValidator(180)]
+    )
+
+    # TODO: add media field for images, videos, audio
+    # TODO: add reference links field
+    population_density = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True
+    )
+    migration_route = models.TextField(blank=True, null=True)
+    metadata = models.OneToOneField(
+        SiteMetadata,
+        on_delete=models.CASCADE,
+        related_name='site_metadata',
+    )
+    site_settings = models.ForeignKey(
+        SiteSettings,
+        on_delete=models.PROTECT,
+        default=1  # Default global settings
+    )
+    date_created = models.DateTimeField(auto_now_add=True)
+    last_updated = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='created_site',
+        null=True, blank=True)
+
+    objects = SiteManager()
+
+    def get_verification_status(self):
+
+        votes = self.site_verification_vote.all().values(
+            'vote').annotate(count=Count('vote'))
+        vote_counts = {item['vote']: item['count'] for item in votes}
+        return {
+            'total_votes': self.site_verification_vote.count(),
+            'required_votes': self.site_settings.required_verifier_count,
+            'approve_count': vote_counts.get('approve', 0),
+            'reject_count': vote_counts.get('reject', 0),
+            'status': self.status
+        }
+
+    def can_user_verify(self, user):
+        """Check if user can verify this site"""
+        settings = SiteSettings.load()
+        return (
+            user in settings.verifiers.all() and
+            not self.site_verification_vote.filter(verifier=user).exists()
+        )
+
+    class Meta:
+        ordering = ['-date_created']
+        indexes = [
+            models.Index(fields=['status', 'category']),
+            models.Index(fields=['latitude', 'longitude']),
+            models.Index(fields=['-date_created']),
+        ]
+        permissions = [
+            ("can_verify_site", "Can verify sites"),
+            ("can_override_verification", "Can override verification status"),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.site_name} ({self.get_category_display()}) - {self.get_status_display()}"
+
+
+class SiteVerificationVote(models.Model):
+    """ Track verifier votes on heritage sites """
+    site = models.ForeignKey(
+        HeritageSite,
+        on_delete=models.CASCADE,
+        related_name='site_verification_vote'
+    )
+    verifier = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='site_verifier'
+    )
+    vote = models.CharField(
+        max_length=10,
+        choices=VOTE_CHOICES,
+    )
+    voted_at = models.DateTimeField(auto_now_add=True)
+    comment = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('site', 'verifier')
+        ordering = ['-voted_at']
+        indexes = [
+            models.Index(fields=['site', 'vote']),
+        ]
+
+    def __str__(self) -> str:
+        return f"{self.verifier.email} - {self.vote} on {self.site.site_name}"
+
+
+class VerificationLog(models.Model):
+    """Audit log for status changes and admin overrides"""
+
+    site = models.ForeignKey(
+        HeritageSite,
+        on_delete=models.CASCADE,
+        related_name='verification_logs'
+    )
+    previous_status = models.CharField(max_length=20)
+    new_status = models.CharField(max_length=20)
+    changed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    is_override = models.BooleanField(default=False)
+    reason = models.TextField(blank=True)
+    timestamp = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-timestamp']
+
+    def __str__(self):
+        override_text = " (OVERRIDE)" if self.is_override else ""
+        return f"{self.site.name}: {self.previous_status} → {self.new_status}{override_text}"

@@ -7,6 +7,7 @@ from PIL import Image
 import tempfile
 import datetime
 
+
 def create_user(**params):
     return get_user_model().objects.create_user(**params)
 
@@ -23,9 +24,9 @@ def image_path(instance, filename):
 
     ext = os.path.splitext(filename)[1]
     filename = f'{uuid.uuid4()}{ext}'
-    if type(instance) == models.Onboarding:
+    if isinstance(models.Onboarding):
         class_name = 'onboarding_notes'
-    elif type(instance) == models.OnboardingStep:
+    elif isinstance(models.OnboardingStep):
         class_name = 'onboarding_step_notes'
     else:
         class_name = 'test'
@@ -42,6 +43,7 @@ def get_image():
     _file = open(file.name, 'rb')
 
     return _file
+
 
 def document_path(instance, filename):
     """Generate a path for instance documents"""

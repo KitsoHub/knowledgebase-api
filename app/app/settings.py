@@ -44,6 +44,7 @@ INSTALLED_APPS = [
     'core',
     'onboarding',
     'policy',
+    'sites',
     'corsheaders',
 ]
 
@@ -85,10 +86,10 @@ WSGI_APPLICATION = 'app.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
-        'NAME':os.environ.get('DB_NAME'),
-        'HOST':os.environ.get('DB_HOST'),
-        'USER':os.environ.get('DB_USER'),
-        'PASSWORD':os.environ.get('DB_PASS')
+        'NAME': os.environ.get('DB_NAME'),
+        'HOST': os.environ.get('DB_HOST'),
+        'USER': os.environ.get('DB_USER'),
+        'PASSWORD': os.environ.get('DB_PASS')
     }
 }
 

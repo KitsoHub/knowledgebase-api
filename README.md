@@ -36,6 +36,15 @@
 - app/knowledgebase/views
 
 
+**Sites App structure**
+- app/sites/tests/
+- app/sites/urls
+- app/sites/serializers
+- app/sites/apps
+- app/sites/views
+
+
+
 2. ### Set Up
 | Syntax | Description |
 | ----------- | ----------- |
@@ -43,3 +52,23 @@
 | `docker-compose build`  | Build the image using docker compose configurations |
 | `docker-compose run --rm app sh -c "python3 manage.py createsuperuser" `  | Creating a super user eg (admin123) |
 | `docker-compose up`  | Start all the services |
+
+
+
+3. ### Apps Set Up
+| Syntax | Description |
+| ----------- | ----------- |
+| `docker-compose run --rm app sh -c "python manage.py startapp sites "`| Create a sites app |
+
+
+4. ### Migrations
+| Syntax | Description |
+| ----------- | ----------- |
+| `docker-compose run --rm app sh -c "python manage.py makemigrations "`| Make migrations |
+| `docker-compose run --rm app sh -c "python manage.py wait_for_db && python manage.py migrate "`| Migrate |
+
+
+5. ### Tests
+| Syntax | Description |
+| ----------- | ----------- |
+| `docker-compose run --rm app sh -c "python manage.py test core "`| All tests for models |

@@ -31,6 +31,7 @@ urlpatterns = [
     path('api/user/', include('user.urls')),
     path('api/onboarding/', include('onboarding.urls')),
     path('api/policy/', include('policy.urls')),
+    path('api/sites/', include('sites.urls')),
 ]
 
 if settings.DEBUG:

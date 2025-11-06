@@ -40,3 +40,5 @@ class UserManager(BaseUserManager):
         user.save(using=self._db)
 
         return user
+
+# Site Manager and QuerySet

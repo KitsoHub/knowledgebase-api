@@ -406,16 +406,28 @@ class HeritageSite(models.Model):
     objects = SiteManager()
 
     def get_verification_status(self):
+        """
+        Calculate current verification status with vote counts
+        Returns dict with approve/reject counts and required threshold
+        """
+        from core.models import SiteSettings
+        settings = SiteSettings.load()
+        verifications = self.site_verification_vote.all()
 
-        votes = self.site_verification_vote.all().values(
-            'vote').annotate(count=Count('vote'))
-        vote_counts = {item['vote']: item['count'] for item in votes}
+        approve_count = verifications.filter(vote='approve').count()
+        reject_count = verifications.filter(vote='reject').count()
+        total_votes = verifications.count()
+        pending_verifiers = settings.verifiers.exclude(
+            site_verification_verifier__site=self
+        ).count()
+
         return {
-            'total_votes': self.site_verification_vote.count(),
-            'required_votes': self.site_settings.required_verifier_count,
-            'approve_count': vote_counts.get('approve', 0),
-            'reject_count': vote_counts.get('reject', 0),
-            'status': self.status
+            'approve_count': approve_count,
+            'reject_count': reject_count,
+            'total_votes': total_votes,
+            'required_count': settings.required_verifier_count,
+            'pending_verifiers': pending_verifiers,
+            'status': self.status,
         }
 
     def can_user_verify(self, user):
@@ -452,7 +464,7 @@ class SiteVerificationVote(models.Model):
     verifier = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
-        related_name='site_verifier'
+        related_name='site_verification_verifier'
     )
     vote = models.CharField(
         max_length=10,

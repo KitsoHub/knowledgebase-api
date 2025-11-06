@@ -170,6 +170,7 @@ class SiteAdmin(admin.ModelAdmin):
         }),
         ('Verification', {
             'fields': ('verification_summary',)
+
         })
     )
 
@@ -207,14 +208,15 @@ class SiteAdmin(admin.ModelAdmin):
             return "Save site to see verification status"
 
         status = obj.get_verification_status()
+        pending = status.get('pending_verifiers', 0)
         html = f"""
-        <div style="background: #f0f0f0; padding: 10px; border-radius: 5px;">
+        <div style=" padding: 10px; border-radius: 5px;">
             <p><strong>Approvals:</strong> {status['approve_count']}/{status['required_count']}  approvals</p>
             <p><strong>Approvals:</strong> {status['approve_count']}</p>
             <p><strong>Rejections:</strong> {status['reject_count']}</p>
             <p><strong>Total Votes:</strong> {status['total_votes']}</p>
             <p><strong>Required:</strong> {status['required_count']}</p>
-            <p><strong>Pending Verifiers:</strong> {status['pending_verifiers']}</p>
+            <p></br><strong>Pending Verifiers:</strong> {pending}</p>
         </div>
         """
         return format_html(html)

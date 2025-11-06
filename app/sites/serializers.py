@@ -160,9 +160,9 @@ class SiteDetailSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id', 'created_by', 'date_created', 'last_updated']
 
-    def get_verification_status(self, obj):
-        """Get vote counts and threshold information"""
-        return obj.get_verification_status()
+    # def get_verification_status(self, obj):
+    #     """Get vote counts and threshold information"""
+    #     return obj.get_verification_status()
 
     def get_can_verify(self, obj):
         """Check if current user can verify this site"""
@@ -170,6 +170,20 @@ class SiteDetailSerializer(serializers.ModelSerializer):
         if not request or not request.user.is_authenticated:
             return False
         return obj.can_user_verify(request.user)
+
+    def get_verification_status(self, obj):
+        """Get vote counts and threshold information"""
+        status = obj.get_verification_status()
+
+        # Add pending_verifiers if missing
+        if 'pending_verifiers' not in status:
+            from sites.models import SiteSettings
+            settings = SiteSettings.load()
+            status['pending_verifiers'] = settings.verifiers.exclude(
+                verifications__site=obj
+            ).count()
+
+        return status
 
 
 class SiteCreateUpdateSerializer(serializers.ModelSerializer):

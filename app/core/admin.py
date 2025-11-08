@@ -2,7 +2,13 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from django.utils.translation import gettext_lazy as _
 from django.utils.html import format_html
+from django import forms
+from django.shortcuts import redirect
+from django.template.response import TemplateResponse
+from django.urls import path
 from core import models
+from core.choices import SITES_STATUS_CHOICES
+from sites.services import VerificationService
 
 
 @admin.register(models.User)
@@ -141,6 +147,16 @@ class VerificationLogAdmin(admin.ModelAdmin):
         return False
 
 
+class AdminOverrideForm(forms.Form):
+
+    new_status = forms.ChoiceField(choices=SITES_STATUS_CHOICES)
+    reason = forms.CharField(
+        widget=forms.Textarea,
+        required=False,
+        help_text="Optional reason for the status override"
+    )
+
+
 @admin.register(models.HeritageSite)
 class SiteAdmin(admin.ModelAdmin):
     """Admin for heritage sites"""
@@ -233,6 +249,69 @@ class SiteAdmin(admin.ModelAdmin):
         return "No metadata available"
 
     metadata_details.short_description = 'Metadata'
+
+    def get_actions(self, request):
+        actions = super().get_actions(request)
+
+        # Remove delete action for safety
+        if 'delete_selected' in actions:
+            del actions['delete_selected']
+
+        return actions
+
+    def get_urls(self):
+        urls = super().get_urls()
+        custom_urls = [
+            path(
+                '<int:object_id>/override_status/',
+                self.admin_site.admin_view(self.override_status_view),
+                name='site-override-status',
+            ),
+        ]
+        return custom_urls + urls
+
+    def override_status_view(self, request, object_id):
+        site = self.get_object(request, object_id)
+
+        if request.method == 'POST':
+            form = AdminOverrideForm(request.POST)
+            if form.is_valid():
+                status = form.cleaned_data['status']
+                reason = form.cleaned_data['reason']
+
+                try:
+                    VerificationService.admin_override(
+                        site=site,
+                        new_status=status,
+                        admin_user=request.user,
+                        reason=reason
+                    )
+                    self.message_user(
+                        request, f"Site status overridden to {status}")
+                    return redirect('admin:heritage_site_site_change', object_id)
+                except Exception as e:
+                    self.message_user(
+                        request, f"Error: {str(e)}", level='ERROR')
+        else:
+            form = AdminOverrideForm()
+
+        context = {
+            **self.admin_site.each_context(request),
+            'title': f'Admin Override for object title "{site.site_name}"',
+            'form': form,
+            'site': site,
+            'opts': self.model._meta,
+        }
+        return TemplateResponse(request, 'admin/site_override_status.html', context)
+
+    change_form_template = 'admin/core/heritagesite/change_form.html'
+
+    def change_view(self, request, object_id, form_url='', extra_context=None):
+        extra_context = extra_context or {}
+        extra_context['show_override_button'] = request.user.is_superuser
+        return super().change_view(
+            request, object_id, form_url, extra_context=extra_context
+        )
 
 
 admin.site.register(models.Department)

@@ -74,3 +74,9 @@
 | `docker-compose run --rm app sh -c "python manage.py test core "`| All tests for models |
 | `docker-compose run --rm app sh -c "python manage.py test --tag siteapis "`| All tests for siteapis |
 | `docker-compose run --rm app sh -c "python manage.py test --tag verificationflow "`| All tests for verifications |
+
+6. ### Container Access
+| Syntax | Description |
+| ----------- | ----------- |
+| `docker exec -it knowledgebase-api_app_1 /bin/bash"`| Django Rest App Container |
+| `docker exec -it knowledgebase-api_db_1 /bin/bash"`| Database Container |

@@ -506,4 +506,4 @@ class VerificationLog(models.Model):
 
     def __str__(self):
         override_text = " (OVERRIDE)" if self.is_override else ""
-        return f"{self.site.name}: {self.previous_status} → {self.new_status}{override_text}"
+        return f"{self.site.site_name}: {self.previous_status} → {self.new_status}{override_text}"

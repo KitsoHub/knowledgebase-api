@@ -1,0 +1,20 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls %}
+
+{% block object-tools %}
+{% if change and not is_popup and show_override_button %}
+<div class="object-tools-section" style="margin-bottom: 50px;">
+    <h2 class="object-tools-section-header">Verification Actions</h2>
+    <ul class="object-tools">
+        <li>
+            <a href="{% url 'admin:site-override-status' object_id=original.pk %}" class="historylink">
+                Override Status
+            </a>
+
+        </li>
+    </ul>
+</div>
+
+{% endif %}
+{{ block.super }}
+{% endblock %}

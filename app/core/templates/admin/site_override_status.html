@@ -1,0 +1,47 @@
+{% extends "admin/base_site.html" %}
+{% load i18n admin_urls %}
+
+{% block breadcrumbs %}
+<div class="breadcrumbs">
+    <a href="{% url 'admin:index' %}">Home</a> &rsaquo;
+    <a href="{% url 'admin:app_list' app_label=opts.app_label %}">{{ opts.app_config.verbose_name }}</a> &rsaquo;
+    <a href="{% url 'admin:core_heritagesite_changelist' %}">Sites</a> &rsaquo;
+    {{ site.name }}
+</div>
+{% endblock %}
+
+{% block content %}
+<h1> Override Status for "{{ site.site_name }}"</h1>
+
+<div class="module">
+    <form method="post" novalidate>
+        {% csrf_token %}
+
+        <fieldset class="module aligned">
+            <div class="form-row">
+                <label>Current Status:</label>
+                <div class="readonly">{{ site.get_status_display }}</div>
+            </div>
+
+            <div class="form-row">
+                {{ form.new_status.errors }}
+                <label for="id_status">New Status:</label>
+                {{ form.new_status }}
+            </div>
+
+            <div class="form-row">
+                {{ form.reason.errors }}
+                <label for="id_reason">Reason (optional):</label>
+                {{ form.reason }}
+                <p class="help">{{ form.reason.help_text }}</p>
+            </div>
+        </fieldset>
+
+        <div class="submit-row">
+            <input type="submit" value="Override Status" class="default">
+
+            <a href="{% url 'admin:core_heritagesite_change' object_id=site.id %}" class="button">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

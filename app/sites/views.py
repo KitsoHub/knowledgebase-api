@@ -3,7 +3,7 @@ from rest_framework import viewsets, status
 from rest_framework.response import Response
 from rest_framework.authentication import TokenAuthentication
 from rest_framework.permissions import IsAuthenticated
-from sites.permission import IsVerifier
+from sites.permission import IsVerifier, IsSuperAdminOrReadOnly
 from sites.services import VerificationService
 from rest_framework.decorators import action
 from django.db.models import Q
@@ -12,7 +12,7 @@ from django.db.models import Q
 from core.models import HeritageSite, SiteVerificationVote
 from sites.serializers import (SiteListSerializer, SiteCreateUpdateSerializer,
                                SiteDetailSerializer, SiteVerificationVoteSerializer as VerificationVoteSerializer,
-                               VoteSubmissionSerializer)
+                               VoteSubmissionSerializer, AdminOverrideSerializer)
 
 
 class HeritageSiteViewSet(viewsets.ModelViewSet):
@@ -90,6 +90,29 @@ class HeritageSiteViewSet(viewsets.ModelViewSet):
                 'site': response_serializer.data
             }, status=status.HTTP_201_CREATED)
 
+        except Exception as e:
+            return Response(
+                {'error': str(e)},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
+    @action(detail=True, methods=['post'], permission_classes=[IsAuthenticated, IsSuperAdminOrReadOnly])
+    def override_status(self, request, pk=None):
+        """Superadmin-only endpoint to override verification status"""
+        site = self.get_object()
+        serializer = AdminOverrideSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            VerificationService.admin_override(
+                site=site,
+                new_status=serializer.validated_data['new_status'],
+                admin_user=request.user,
+                reason=serializer.validated_data.get('reason', '')
+            )
+            # Return updated site data
+            site.refresh_from_db()
+            return Response(SiteDetailSerializer(site).data)
         except Exception as e:
             return Response(
                 {'error': str(e)},

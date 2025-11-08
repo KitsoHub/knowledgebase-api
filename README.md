@@ -72,3 +72,5 @@
 | Syntax | Description |
 | ----------- | ----------- |
 | `docker-compose run --rm app sh -c "python manage.py test core "`| All tests for models |
+| `docker-compose run --rm app sh -c "python manage.py test --tag siteapis "`| All tests for siteapis |
+| `docker-compose run --rm app sh -c "python manage.py test --tag verificationflow "`| All tests for verifications |

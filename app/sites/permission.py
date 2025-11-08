@@ -49,3 +49,36 @@ class CanOverrideVerification(permissions.BasePermission):
             return False
 
         return request.user.has_perm('heritage_sites.can_override_verification')
+
+
+class IsAssignedVerifier(permissions.BasePermission):
+    """Allows access only to users assigned as verifiers for the site"""
+
+    def has_object_permission(self, request, view, obj):
+        # Check if user is in the site's verifier list
+        return obj.site_settings.verifiers.filter(id=request.user.id).exists()
+
+
+class IsSuperAdminOrReadOnly(permissions.BasePermission):
+    """Allows superusers full access, others read-only access"""
+
+    def has_permission(self, request, view):
+        # Allow read-only access for any request
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        # Write permissions require superuser status
+        return request.user and request.user.is_superuser
+
+
+class IsSiteOwnerOrReadOnly(permissions.BasePermission):
+    """Allows site owners to edit, others read-only"""
+
+    def has_object_permission(self, request, view, obj):
+        # Read permissions are allowed to any request
+        if request.method in permissions.SAFE_METHODS:
+            return True
+
+        # Write permissions are only allowed to the owner
+        # Assuming you have a way to identify the owner (e.g., created_by field)
+        return obj.created_by == request.user

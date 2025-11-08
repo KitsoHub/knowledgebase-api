@@ -5,6 +5,7 @@ from rest_framework import serializers
 from core.models import (SiteMetadata, SiteVerificationVote, HeritageSite,
                          VerificationLog, User, SiteSettings)
 from user.serializers import UserSerializer
+from core.choices import SITES_STATUS_CHOICES
 
 
 class SiteMetadataSerializer(serializers.ModelSerializer):
@@ -209,7 +210,6 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     f"Missing required metadata key: {key}")
 
-        # Validate sensitivity level
         if value['sensitivity_level'] not in ['public', 'restricted', 'closed']:
             raise serializers.ValidationError("Invalid sensitivity level")
 
@@ -247,7 +247,7 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
         return site
 
     def update(self, instance, validated_data):
-        # Handle metadata update separately
+
         if 'metadata' in validated_data:
             metadata_data = validated_data.pop('metadata')
             metadata_serializer = SiteMetadataSerializer(
@@ -259,3 +259,17 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
             metadata_serializer.save()
 
         return super().update(instance, validated_data)
+
+
+class AdminOverrideSerializer(serializers.Serializer):
+    """Serializer for admin override of verification status"""
+
+    new_status = serializers.ChoiceField(choices=SITES_STATUS_CHOICES)
+    reason = serializers.CharField(
+        required=False, allow_blank=True, max_length=1000)
+
+    def validate_override_status(self, value):
+        if value == 'pending':
+            raise serializers.ValidationError(
+                "Cannot override to 'pending' status.")
+        return value

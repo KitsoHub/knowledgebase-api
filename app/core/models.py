@@ -292,6 +292,7 @@ class SiteSettings(models.Model):
     )
 
     # Singleton pattern - only one settings instance
+    # TODO: To udate settings, to allow more voters and change required count but remain with the default count of 2
     def save(self, *args, **kwargs):
         self.pk = 1
         super().save(*args, **kwargs)

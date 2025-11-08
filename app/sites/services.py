@@ -1,5 +1,6 @@
 # heritage_sites/services.py
 from django.db import transaction
+from django.db.models import Count
 from django.core.exceptions import PermissionDenied, ValidationError
 # from django.core.mail import send_mail
 # from django.conf import settings
@@ -59,20 +60,25 @@ class VerificationService:
         settings_obj = SiteSettings.load()
         required = settings_obj.required_verifier_count
 
-        verifications = site.site_verification_vote.all()
-        approve_count = verifications.filter(vote='approve').count()
-        reject_count = verifications.filter(vote='reject').count()
+        # verifications = site.site_verification_vote.all()
+        # approve_count = verifications.filter(vote='approve').count()
+        # reject_count = verifications.filter(vote='reject').count()
+        vote_counts = site.site_verification_vote.values(
+            'vote').annotate(count=Count('vote'))
+        approve_count = next(
+            (item['count'] for item in vote_counts if item['vote'] == 'approve'), 0)
+        reject_count = next(
+            (item['count'] for item in vote_counts if item['vote'] == 'reject'), 0)
 
-        return {
-            'approve_count': approve_count,
-            'reject_count': reject_count,
-            'required_count': required,
-            'threshold_met': approve_count >= required or reject_count >= required,
-            'would_verify': approve_count >= required,
-            'would_reject': reject_count >= required,
-        }
+        if approve_count >= required:
+            site.status = 'verified'
+            site.save()
+        elif reject_count >= required:
+            site.status = 'rejected'
+            site.save()
 
     @staticmethod
+    @transaction.atomic
     def admin_override(site, new_status, admin_user, reason=''):
         """
         Allow admin to override verification status.
@@ -98,27 +104,38 @@ class VerificationService:
 
         previous_status = site.status
 
-        with transaction.atomic():
-            site.status = new_status
-            site.save(update_fields=['status', 'last_updated'])
+        site.status = new_status
+        site.save(update_fields=['status', 'last_updated'])
+        VerificationLog.objects.create(
+            site=site,
+            previous_status=previous_status,
+            new_status=new_status,
+            changed_by=admin_user,
+            is_override=True,
+            reason=reason or "Admin override"
+        )
 
-            # Create audit log for override
-            VerificationLog.objects.create(
-                site=site,
-                previous_status=previous_status,
-                new_status=new_status,
-                changed_by=admin_user,
-                is_override=True,
-                reason=reason or "Admin override"
-            )
+        # with transaction.atomic():
+        #     site.status = new_status
+        #     site.save(update_fields=['status', 'last_updated'])
 
-            # Send notifications
-            # NotificationService.notify_status_change(
-            #     site=site,
-            #     old_status=previous_status,
-            #     new_status=new_status,
-            #     changed_by=admin_user,
-            #     is_override=True
-            # )
+        #     # Create audit log for override
+        #     VerificationLog.objects.create(
+        #         site=site,
+        #         previous_status=previous_status,
+        #         new_status=new_status,
+        #         changed_by=admin_user,
+        #         is_override=True,
+        #         reason=reason or "Admin override"
+        #     )
 
+        # Send notifications
+        # NotificationService.notify_status_change(
+        #     site=site,
+        #     old_status=previous_status,
+        #     new_status=new_status,
+        #     changed_by=admin_user,
+        #     is_override=True
+        # )
+        site.site_verification_vote.all().delete()
         return site

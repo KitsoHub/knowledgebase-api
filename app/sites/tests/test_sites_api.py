@@ -4,7 +4,8 @@ from django.contrib.auth.models import Permission, Group
 from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
-from core.models import (User, HeritageSite, SiteSettings, SiteMetadata)
+from core.models import (User, HeritageSite, SiteSettings,
+                         SiteMetadata, VerificationLog)
 # import json
 from core.helpers import create_user, create_verifier
 
@@ -69,34 +70,6 @@ class SiteAPITest(TestCase):
         self.assertEqual(res.status_code, status.HTTP_200_OK)
         self.assertGreater(len(res.data), 0)
 
-    # def test_create_site_unauthenticated(self):
-    #     """Test unauthenticated user cannot create site"""
-    #     response = self.client.post(
-    #         '/api/sites/',
-    #         data=json.dumps(self.site_data),
-    #         content_type='application/json'
-    #     )
-
-    #     self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
-
-    # def test_create_site_authenticated(self):
-    #     """Test authenticated user can create site"""
-    #     self.client.force_authenticate(user=self.user)
-
-    #     response = self.client.post(
-    #         '/api/sites/',
-    #         data=json.dumps(self.site_data),
-    #         content_type='application/json'
-    #     )
-
-    #     self.assertEqual(response.status_code, status.HTTP_201_CREATED)
-    #     self.assertEqual(HeritageSite.objects.count(), 1)
-
-    #     site = HeritageSite.objects.first()
-    #     self.assertEqual(site.name, 'Test Heritage Site')
-    #     self.assertEqual(site.status, 'pending')
-    #     self.assertEqual(site.created_by, self.user)
-
 
 @tag('verificationflow')
 class VerificationFlowTest(TestCase):
@@ -143,7 +116,7 @@ class VerificationFlowTest(TestCase):
         #     required_verifier_count=2
         # )
 
-        self.site_settings = SiteSettings.load()  # Using singleton pattern
+        self.site_settings = SiteSettings.load()
         self.site_settings.required_verifier_count = 2
         self.site_settings.save()
 
@@ -228,3 +201,129 @@ class VerificationFlowTest(TestCase):
         self.assertEqual(self.site.status, 'verified')
         self.assertEqual(response.data['site']['status'], 'verified')
         self.assertEqual(self.site.site_verification_vote.count(), 2)
+
+    def test_rejected_with_two_rejections(self):
+        """Test that status changes to 'rejected' with 2 reject votes"""
+
+        self.client.force_authenticate(user=self.verifier1)
+        self.client.post(
+            f'/api/sites/sites/{self.site.id}/submit_verification/',
+            {'vote': 'reject'}
+        )
+
+        self.client.force_authenticate(user=self.verifier2)
+        response = self.client.post(
+            f'/api/sites/sites/{self.site.id}/submit_verification/',
+            {'vote': 'reject'}
+        )
+
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.status, 'rejected')
+        self.assertEqual(response.data['site']['status'], 'rejected')
+        self.assertEqual(self.site.site_verification_vote.count(), 2)
+
+    def test_admin_can_override(self):
+        """Test that superadmin can override status regardless of votes"""
+        self.client.force_authenticate(user=self.verifier1)
+        self.client.post(
+            f'/api/sites/sites/{self.site.id}/submit_verification/',
+            {'vote': 'reject'}
+        )
+
+        self.client.force_authenticate(user=self.superuser)
+        self.client.post(
+            f'/api/sites/sites/{self.site.id}/override_status/',
+            {'new_status': 'rejected', 'reason': 'Override to rejected for testing'}
+        )
+
+        # if response.status_code != status.HTTP_201_CREATED:
+        #     print(f"Response status: {response.status_code}")
+        #     print(f"Response data: {response.data}")
+
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.status, 'rejected')
+        self.assertEqual(self.site.site_verification_vote.count(), 0)
+
+    def test_non_admin_cannot_override(self):
+        """Test that regular users cannot override status"""
+        self.client.force_authenticate(user=self.user)
+        response = self.client.post(
+            f'/api/sites/sites/{self.site.id}/override_status/',
+            {'status': 'verified'}
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+
+    def test_admin_can_override_without_votes_valid(self):
+        """ Test that admin can override to 'verified' without votes """
+
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.status, 'pending')
+        self.assertEqual(self.site.site_verification_vote.count(), 0)
+
+        self.client.force_authenticate(user=self.superuser)
+        response = self.client.post(
+            f'/api/sites/sites/{self.site.id}/override_status/',
+            {'new_status': 'verified', 'reason': 'Admin override to verified'}
+        )
+
+        if response.status_code != status.HTTP_200_OK:
+            print(f"Response status: {response.status_code}")
+            print(f"Response data: {response.data}")
+
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.status, 'verified')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(self.site.site_verification_vote.count(), 0)
+        self.assertTrue(
+            VerificationLog.objects.filter(
+                site=self.site,
+                is_override=True,
+                new_status='verified'
+            ).exists()
+        )
+
+
+#    TODO: Fix this test with site settings update to foreign key
+
+    # def test_verified_with_three_votes(self):
+    #     """Test that status changes to 'verified' with 2 approve and 1 reject votes"""
+
+    #     self.site_settings = SiteSettings.load()
+    #     self.site_settings.required_verifier_count = 3
+    #     self.site_settings.save()
+    #     self.client.force_authenticate(user=self.verifier1)
+    #     res1 = self.client.post(
+    #         f'/api/sites/sites/{self.site.id}/submit_verification/',
+    #         {'vote': 'approve'}
+    #     )
+
+    #     self.client.force_authenticate(user=self.verifier2)
+    #     res2 = self.client.post(
+    #         f'/api/sites/sites/{self.site.id}/submit_verification/',
+    #         {'vote': 'approve'}
+    #     )
+
+    #     self.client.force_authenticate(user=self.verifier3)
+    #     response = self.client.post(
+    #         f'/api/sites/sites/{self.site.id}/submit_verification/',
+    #         {'vote': 'reject'}
+    #     )
+
+    #     if res1.status_code != status.HTTP_201_CREATED:
+    #         print(f"Response status 1: {res1.status_code}")
+    #         print(f"Response data: {res1.data}")
+
+    #     if res2.status_code != status.HTTP_201_CREATED:
+    #         print(f"Response status 2: {res2.status_code}")
+    #         print(f"Response data: {res2.data}")
+
+    #     if response.status_code != status.HTTP_201_CREATED:
+    #         print(f"Response status 3: {response.status_code}")
+    #         print(f"Response data: {response.data}")
+
+    #     self.site.refresh_from_db()
+    #     breakpoint()
+    #     self.assertEqual(self.site.status, 'verified')
+    #     self.assertEqual(response.data['site']['status'], 'verified')
+    #     self.assertEqual(self.site.site_verification_vote.count(), 3)

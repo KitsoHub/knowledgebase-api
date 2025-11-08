@@ -2,9 +2,19 @@ from django.db.models.signals import post_save
 from django.dispatch import receiver
 from django.db import transaction
 from core.models import SiteVerificationVote, VerificationLog, SiteSettings
+from sites.services import VerificationService
 
 
 @receiver(post_save, sender=SiteVerificationVote)
+def update_site_status(sender, instance, created, **kwargs):
+    """Update site status when a new vote is added"""
+    if created:
+        # Only check verification threshold if status is still pending
+        if instance.site.status == 'pending':
+            VerificationService.check_verification_threshold(instance.site)
+
+
+# @receiver(post_save, sender=SiteVerificationVote)
 def check_verification_threshold(sender, instance, created, **kwargs):
     """
     Has site reached verification threshold after a vote is cast.
@@ -23,7 +33,6 @@ def check_verification_threshold(sender, instance, created, **kwargs):
     settings = SiteSettings.load()
     required_count = settings.required_verifier_count
 
-    # Get vote counts using aggregation for efficiency
     verifications = site.site_verification_vote.all()
     approve_count = verifications.filter(vote='approve').count()
     reject_count = verifications.filter(vote='reject').count()
@@ -42,7 +51,6 @@ def check_verification_threshold(sender, instance, created, **kwargs):
             site.status = new_status
             site.save(update_fields=['status', 'last_updated'])
 
-            # Create audit log
             VerificationLog.objects.create(
                 site=site,
                 previous_status=previous_status,

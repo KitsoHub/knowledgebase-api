@@ -5,9 +5,9 @@ from django.contrib.auth import get_user_model
 from rest_framework.test import APIClient
 from rest_framework import status
 from core.models import (User, HeritageSite, SiteSettings,
-                         SiteMetadata, VerificationLog)
+                         SiteMetadata, VerificationLog, SiteImages)
 # import json
-from core.helpers import create_user, create_verifier
+from core.helpers import create_user, create_verifier, get_image, os
 
 SITES_URL = reverse('sites:sites-list')
 
@@ -282,6 +282,40 @@ class VerificationFlowTest(TestCase):
                 new_status='verified'
             ).exists()
         )
+
+# site images tests
+
+
+class SiteImageTests(TestCase):
+    """Tests for site images upload and retrieval"""
+
+    def setUp(self):
+        self.client = APIClient()
+        self.user = create_user(
+            email='testuser@example.com', password='testpass')
+
+        self.client.force_authenticate(user=self.user)
+
+    def test_upload_site_image(self):
+
+        payload = {
+            'site_name': 'Image Test Site',
+            'description': 'Site for testing image upload',
+            'category': 'heritage',
+            'latitude': 10.0,
+            'longitude': 20.0,
+            'population_density': 500,
+            'migration_route': 'Test route',
+            'created_by': self.user,
+            'uploaded_image': [get_image(), get_image()], }
+
+        res = self.client.post(SITES_URL, payload, format='multipart')
+        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+
+        site_images = SiteImages.objects.filter(site__id=res.data['id'])
+        self.assertEqual(site_images.count(), 2)
+        self.assertIn('uploaded_image', res.data)
+        self.assertTrue(os.path.exists(site_images[0].images.path))
 
 
 #    TODO: Fix this test with site settings update to foreign key

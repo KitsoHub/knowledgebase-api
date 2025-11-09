@@ -507,3 +507,18 @@ class VerificationLog(models.Model):
     def __str__(self):
         override_text = " (OVERRIDE)" if self.is_override else ""
         return f"{self.site.site_name}: {self.previous_status} → {self.new_status}{override_text}"
+
+# site images
+
+
+class SiteImages(models.Model):
+    """Class representing site images"""
+    site = models.ForeignKey(
+        HeritageSite,
+        related_name='images',
+        on_delete=models.CASCADE,
+        null=True,
+        blank=True
+    )
+    images = models.ImageField(null=True, upload_to=image_path)
+    uploaded_at = models.DateTimeField(auto_now=True)

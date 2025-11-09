@@ -24,7 +24,9 @@ def image_path(instance, filename):
 
     ext = os.path.splitext(filename)[1]
     filename = f'{uuid.uuid4()}{ext}'
-    if isinstance(models.Onboarding):
+    if isinstance(models.HeritageSite):
+        class_name = 'heritage_site'
+    elif isinstance(models.Onboarding):
         class_name = 'onboarding_notes'
     elif isinstance(models.OnboardingStep):
         class_name = 'onboarding_step_notes'

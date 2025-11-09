@@ -3,7 +3,7 @@
 # TODO: add media serializers later : media, verification, admin override
 from rest_framework import serializers
 from core.models import (SiteMetadata, SiteVerificationVote, HeritageSite,
-                         VerificationLog, User, SiteSettings)
+                         VerificationLog, User, SiteSettings, SiteImages)
 from user.serializers import UserSerializer
 from core.choices import SITES_STATUS_CHOICES
 
@@ -132,59 +132,13 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
         return value
 
 
-class SiteDetailSerializer(serializers.ModelSerializer):
-    """Full serializer for site detail view with verification status"""
-
-    metadata = SiteMetadataSerializer()
-    category_display = serializers.CharField(
-        source='get_category_display', read_only=True)
-    status_display = serializers.CharField(
-        source='get_status_display', read_only=True)
-    created_by = UserSerializer(read_only=True)
-
-    site_verification_vote = SiteVerificationVoteSerializer(
-        many=True, read_only=True)
-    verification_status = serializers.SerializerMethodField()
-    verification_logs = SiteVerificationLogSerializer(
-        many=True, read_only=True)
-    can_verify = serializers.SerializerMethodField()
+class SiteImagesSerializer(serializers.ModelSerializer):
+    """Serializer for site images"""
 
     class Meta:
-        model = HeritageSite
-        fields = [
-            'id', 'site_name', 'description', 'status', 'status_display',
-            'category', 'category_display', 'latitude', 'longitude',
-            'population_density', 'migration_route',
-            'metadata', 'created_by', 'date_created', 'last_updated',
-            'site_verification_vote', 'verification_status',
-            'verification_logs', 'can_verify'
-        ]
-        read_only_fields = ['id', 'created_by', 'date_created', 'last_updated']
-
-    # def get_verification_status(self, obj):
-    #     """Get vote counts and threshold information"""
-    #     return obj.get_verification_status()
-
-    def get_can_verify(self, obj):
-        """Check if current user can verify this site"""
-        request = self.context.get('request')
-        if not request or not request.user.is_authenticated:
-            return False
-        return obj.can_user_verify(request.user)
-
-    def get_verification_status(self, obj):
-        """Get vote counts and threshold information"""
-        status = obj.get_verification_status()
-
-        # Add pending_verifiers if missing
-        if 'pending_verifiers' not in status:
-            from sites.models import SiteSettings
-            settings = SiteSettings.load()
-            status['pending_verifiers'] = settings.verifiers.exclude(
-                verifications__site=obj
-            ).count()
-
-        return status
+        model = SiteImages
+        fields = ['id', 'site', 'images', 'uploaded_at']
+        read_only_fields = ['id', 'uploaded_at']
 
 
 class SiteCreateUpdateSerializer(serializers.ModelSerializer):
@@ -193,13 +147,19 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
     metadata = SiteMetadataSerializer()
     site_verification_vote = SiteVerificationVoteSerializer(
         many=True, read_only=True)
+    images = SiteImagesSerializer(many=True, required=False, read_only=True)
+    uploaded_images = serializers.ListField(
+        child=serializers.ImageField(allow_empty_file=False, use_url=False),
+        write_only=True,
+        required=False,
+    )
 
     class Meta:
         model = HeritageSite
         fields = [
             'site_name', 'description', 'category', 'latitude', 'longitude',
             'population_density', 'migration_route',
-            'metadata', 'site_verification_vote',
+            'metadata', 'site_verification_vote', 'images', 'uploaded_images',
         ]
 
     def validate_metadata(self, value):
@@ -243,7 +203,15 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
         validated_data['status'] = 'pending'
         metadata_data = validated_data.pop('metadata')
         metadata = SiteMetadata.objects.create(**metadata_data)
+        images = validated_data.pop('uploaded_images', None)
+
         site = HeritageSite.objects.create(metadata=metadata, **validated_data)
+
+        if images is not None:
+            SiteImages.objects.bulk_create(
+                SiteImages(site=site, images=image_data) for image_data in images
+            )
+
         return site
 
     def update(self, instance, validated_data):
@@ -259,6 +227,66 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
             metadata_serializer.save()
 
         return super().update(instance, validated_data)
+
+
+class SiteDetailSerializer(SiteCreateUpdateSerializer):
+    """Full serializer for site detail view with verification status"""
+
+    metadata = SiteMetadataSerializer()
+    category_display = serializers.CharField(
+        source='get_category_display', read_only=True)
+    status_display = serializers.CharField(
+        source='get_status_display', read_only=True)
+    created_by = UserSerializer(read_only=True)
+
+    site_verification_vote = SiteVerificationVoteSerializer(
+        many=True, read_only=True)
+    verification_status = serializers.SerializerMethodField()
+    verification_logs = SiteVerificationLogSerializer(
+        many=True, read_only=True)
+    can_verify = serializers.SerializerMethodField()
+
+    class Meta(SiteCreateUpdateSerializer.Meta):
+        model = HeritageSite
+        fields = SiteCreateUpdateSerializer.Meta.fields + [
+            'id', 'created_by', 'date_created', 'last_updated',
+            'site_verification_vote', 'verification_status',
+            'verification_logs', 'can_verify',
+        ]
+        # fields = [
+        #     'id', 'site_name', 'description', 'status', 'status_display',
+        #     'category', 'category_display', 'latitude', 'longitude',
+        #     'population_density', 'migration_route',
+        #     'metadata', 'created_by', 'date_created', 'last_updated',
+        #     'site_verification_vote', 'verification_status',
+        #     'verification_logs', 'can_verify',
+        # ]
+        # read_only_fields = ['id', 'created_by', 'date_created', 'last_updated']
+
+    # def get_verification_status(self, obj):
+    #     """Get vote counts and threshold information"""
+    #     return obj.get_verification_status()
+
+    def get_can_verify(self, obj):
+        """Check if current user can verify this site"""
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            return False
+        return obj.can_user_verify(request.user)
+
+    def get_verification_status(self, obj):
+        """Get vote counts and threshold information"""
+        status = obj.get_verification_status()
+
+        # Add pending_verifiers if missing
+        if 'pending_verifiers' not in status:
+            from sites.models import SiteSettings
+            settings = SiteSettings.load()
+            status['pending_verifiers'] = settings.verifiers.exclude(
+                verifications__site=obj
+            ).count()
+
+        return status
 
 
 class AdminOverrideSerializer(serializers.Serializer):

@@ -24,11 +24,11 @@ def image_path(instance, filename):
 
     ext = os.path.splitext(filename)[1]
     filename = f'{uuid.uuid4()}{ext}'
-    if isinstance(models.HeritageSite):
+    if isinstance(instance, models.HeritageSite):
         class_name = 'heritage_site'
-    elif isinstance(models.Onboarding):
+    elif isinstance(instance, models.Onboarding):
         class_name = 'onboarding_notes'
-    elif isinstance(models.OnboardingStep):
+    elif isinstance(instance, models.OnboardingStep):
         class_name = 'onboarding_step_notes'
     else:
         class_name = 'test'

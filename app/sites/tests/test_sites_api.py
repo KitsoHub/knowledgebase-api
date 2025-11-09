@@ -286,6 +286,7 @@ class VerificationFlowTest(TestCase):
 # site images tests
 
 
+@tag('siteimages')
 class SiteImageTests(TestCase):
     """Tests for site images upload and retrieval"""
 
@@ -293,8 +294,17 @@ class SiteImageTests(TestCase):
         self.client = APIClient()
         self.user = create_user(
             email='testuser@example.com', password='testpass')
+        self.verifier = create_verifier(
+            email='verifieruser@example.com', password='verifierpass')
+
+        self.site_settings = SiteSettings.load()
+        self.site_settings.verifiers.add(self.verifier)
 
         self.client.force_authenticate(user=self.user)
+        self.metadata = SiteMetadata.objects.create(
+            unesco=True,
+            sensitivity_level='public'
+        )
 
     def test_upload_site_image(self):
 
@@ -306,15 +316,36 @@ class SiteImageTests(TestCase):
             'longitude': 20.0,
             'population_density': 500,
             'migration_route': 'Test route',
-            'created_by': self.user,
+
+            'metadata.unesco': False,
+            'metadata.undp': False,
+            'metadata.unicef': False,
+            'metadata.local_context': 'Test context',
+            'metadata.indigenous_system': 'Test system',
+            'metadata.rights': 'Test rights',
+            'metadata.ip_metadata': 'Test metadata',
+            'metadata.sensitivity_level': 'public',
+            'metadata.access_protocol': 'HTTPS',
+            # Should have this set by default from the view
+            'site_settings': str(self.site_settings.id),
             'uploaded_image': [get_image(), get_image()], }
 
-        res = self.client.post(SITES_URL, payload, format='multipart')
-        self.assertEqual(res.status_code, status.HTTP_201_CREATED)
+        # check the data at for images using the self.context['request'].__dict__ in the serializer
+        response = self.client.post(SITES_URL, payload, format='multipart')
 
-        site_images = SiteImages.objects.filter(site__id=res.data['id'])
+        if response.status_code != status.HTTP_201_CREATED:
+            print(f"Response status: {response.status_code}")
+            print(f"Response data: {response.data}")
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        print(f"Response data: {response.data}")
+
+        site = HeritageSite.objects.get(id=response.data['id'])
+
+        site_images = SiteImages.objects.filter(site=site)
+
         self.assertEqual(site_images.count(), 2)
-        self.assertIn('uploaded_image', res.data)
+        self.assertIn('images', response.data)
         self.assertTrue(os.path.exists(site_images[0].images.path))
 
 

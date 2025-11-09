@@ -6,6 +6,7 @@ from core.models import (SiteMetadata, SiteVerificationVote, HeritageSite,
                          VerificationLog, User, SiteSettings, SiteImages)
 from user.serializers import UserSerializer
 from core.choices import SITES_STATUS_CHOICES
+from core.helpers import os
 
 
 class SiteMetadataSerializer(serializers.ModelSerializer):
@@ -137,8 +138,8 @@ class SiteImagesSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = SiteImages
-        fields = ['id', 'site', 'images', 'uploaded_at']
-        read_only_fields = ['id', 'uploaded_at']
+        fields = '__all__'
+        read_only_fields = ['id']
 
 
 class SiteCreateUpdateSerializer(serializers.ModelSerializer):
@@ -157,7 +158,7 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = HeritageSite
         fields = [
-            'site_name', 'description', 'category', 'latitude', 'longitude',
+            'id', 'site_name', 'description', 'category', 'latitude', 'longitude',
             'population_density', 'migration_route',
             'metadata', 'site_verification_vote', 'images', 'uploaded_images',
         ]
@@ -197,20 +198,49 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
     #     validated_data['created_by'] = self.context['request'].user
     #     validated_data['status'] = 'pending'
     #     return super().create(validated_data)
+    def validate_uploaded_images(self, value):
+        """Validate image uploads"""
+        if value is None:
+            return []
+
+        # Limit number of images
+        if len(value) > 10:
+            raise serializers.ValidationError("Maximum 10 images allowed")
+
+        # Validate each image
+        for image in value:
+            if image.size > 10 * 1024 * 1024:  # 10MB limit
+                raise serializers.ValidationError(
+                    "Image size should not exceed 10MB")
+
+            # Check file type
+            valid_extensions = ['.jpg', '.jpeg', '.png', '.gif']
+            ext = os.path.splitext(image.name)[1].lower()
+            if ext not in valid_extensions:
+                raise serializers.ValidationError(
+                    f"Invalid file type: {ext}. Allowed types: {', '.join(valid_extensions)}"
+                )
+
+        return value
 
     def create(self, validated_data):
-        validated_data['created_by'] = self.context['request'].user
+        request = self.context['request']
+        validated_data['created_by'] = request.user
+
         validated_data['status'] = 'pending'
         metadata_data = validated_data.pop('metadata')
         metadata = SiteMetadata.objects.create(**metadata_data)
-        images = validated_data.pop('uploaded_images', None)
 
         site = HeritageSite.objects.create(metadata=metadata, **validated_data)
 
-        if images is not None:
-            SiteImages.objects.bulk_create(
-                SiteImages(site=site, images=image_data) for image_data in images
-            )
+        if 'uploaded_image' in request.data and request.FILES:
+
+            uploaded_images = request.FILES.getlist('uploaded_image')
+
+            if uploaded_images is not None:
+                SiteImages.objects.bulk_create(
+                    SiteImages(site=site, images=image_data) for image_data in uploaded_images
+                )
 
         return site
 
@@ -225,6 +255,11 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
             )
             metadata_serializer.is_valid(raise_exception=True)
             metadata_serializer.save()
+
+        if 'uploaded_images' in validated_data:
+            uploaded_images = validated_data.pop('uploaded_images')
+            for image in uploaded_images:
+                SiteImages.objects.create(site=instance, images=image)
 
         return super().update(instance, validated_data)
 
@@ -251,7 +286,7 @@ class SiteDetailSerializer(SiteCreateUpdateSerializer):
         fields = SiteCreateUpdateSerializer.Meta.fields + [
             'id', 'created_by', 'date_created', 'last_updated',
             'site_verification_vote', 'verification_status',
-            'verification_logs', 'can_verify',
+            'verification_logs', 'can_verify', 'metadata',
         ]
         # fields = [
         #     'id', 'site_name', 'description', 'status', 'status_display',
@@ -261,7 +296,7 @@ class SiteDetailSerializer(SiteCreateUpdateSerializer):
         #     'site_verification_vote', 'verification_status',
         #     'verification_logs', 'can_verify',
         # ]
-        # read_only_fields = ['id', 'created_by', 'date_created', 'last_updated']
+        read_only_fields = ['id', 'created_by', 'date_created', 'last_updated']
 
     # def get_verification_status(self, obj):
     #     """Get vote counts and threshold information"""

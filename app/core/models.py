@@ -522,3 +522,10 @@ class SiteImages(models.Model):
     )
     images = models.ImageField(null=True, upload_to=image_path)
     uploaded_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Site Images"
+        verbose_name_plural = "Site Images"
+
+    def __str__(self) -> str:
+        return f"Image for {self.site.site_name}"

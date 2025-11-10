@@ -7,6 +7,7 @@ from core.models import (SiteMetadata, SiteVerificationVote, HeritageSite,
 from user.serializers import UserSerializer
 from core.choices import SITES_STATUS_CHOICES
 from core.helpers import os
+import json
 
 
 class SiteMetadataSerializer(serializers.ModelSerializer):
@@ -78,6 +79,15 @@ class SiteVerificationLogSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'timestamp']
 
 
+class SiteImagesSerializer(serializers.ModelSerializer):
+    """Serializer for site images"""
+
+    class Meta:
+        model = SiteImages
+        fields = '__all__'
+        read_only_fields = ['id']
+
+
 class SiteListSerializer(serializers.ModelSerializer):
     """Thin serializer for site listings - minimal fields"""
 
@@ -86,6 +96,14 @@ class SiteListSerializer(serializers.ModelSerializer):
     status_display = serializers.CharField(
         source='get_status_display', read_only=True)
     created_by = UserSerializer(read_only=True)
+
+    images = SiteImagesSerializer(many=True, required=False, read_only=True)
+    uploaded_images = serializers.ListField(
+        child=serializers.ImageField(allow_empty_file=False, use_url=False),
+        write_only=True,
+        required=False,
+    )
+
     # verification_status = serializers.SerializerMethodField()
 
     class Meta:
@@ -93,7 +111,7 @@ class SiteListSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'site_name', 'status', 'status_display', 'category',
             'category_display', 'latitude', 'longitude', 'created_by',
-            'date_created', 'last_updated',
+            'date_created', 'last_updated', 'images', 'uploaded_images',
         ]
         read_only_fields = ['id', 'date_created', 'last_updated']
 
@@ -133,15 +151,6 @@ class SiteSettingsSerializer(serializers.ModelSerializer):
         return value
 
 
-class SiteImagesSerializer(serializers.ModelSerializer):
-    """Serializer for site images"""
-
-    class Meta:
-        model = SiteImages
-        fields = '__all__'
-        read_only_fields = ['id']
-
-
 class SiteCreateUpdateSerializer(serializers.ModelSerializer):
     """Serializer for creating and updating sites with validation"""
 
@@ -162,6 +171,21 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
             'population_density', 'migration_route',
             'metadata', 'site_verification_vote', 'images', 'uploaded_images',
         ]
+
+    def to_internal_value(self, data):
+        """
+        Handle cases where metadata might be received as a string
+        This is a critical fix for the "Expected a dictionary, but got str" error
+        """
+        # Handle metadata sent as a JSON string
+        if 'metadata' in data and isinstance(data['metadata'], str):
+            try:
+                data['metadata'] = json.loads(data['metadata'])
+            except json.JSONDecodeError:
+                # If not valid JSON, leave it - validation will catch it
+                pass
+
+        return super().to_internal_value(data)
 
     def validate_metadata(self, value):
         """Validate metadata structure"""
@@ -224,18 +248,22 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def create(self, validated_data):
+        # breakpoint()
         request = self.context['request']
         validated_data['created_by'] = request.user
 
         validated_data['status'] = 'pending'
         metadata_data = validated_data.pop('metadata')
+        images = validated_data.pop('uploaded_images', None)
+
         metadata = SiteMetadata.objects.create(**metadata_data)
 
         site = HeritageSite.objects.create(metadata=metadata, **validated_data)
 
-        if 'uploaded_image' in request.data and request.FILES:
+        if 'uploaded_images' in request.data and request.FILES:
 
-            uploaded_images = request.FILES.getlist('uploaded_image')
+            uploaded_images = request.FILES.getlist(
+                'uploaded_images') or images
 
             if uploaded_images is not None:
                 SiteImages.objects.bulk_create(
@@ -284,7 +312,8 @@ class SiteDetailSerializer(SiteCreateUpdateSerializer):
     class Meta(SiteCreateUpdateSerializer.Meta):
         model = HeritageSite
         fields = SiteCreateUpdateSerializer.Meta.fields + [
-            'id', 'created_by', 'date_created', 'last_updated',
+            'id', 'created_by', 'date_created', 'last_updated', 'status_display',
+            'category_display',
             'site_verification_vote', 'verification_status',
             'verification_logs', 'can_verify', 'metadata',
         ]

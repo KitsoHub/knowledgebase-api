@@ -328,7 +328,7 @@ class SiteImageTests(TestCase):
             'metadata.access_protocol': 'HTTPS',
             # Should have this set by default from the view
             'site_settings': str(self.site_settings.id),
-            'uploaded_image': [get_image(), get_image()], }
+            'uploaded_images': [get_image(), get_image()], }
 
         # check the data at for images using the self.context['request'].__dict__ in the serializer
         response = self.client.post(SITES_URL, payload, format='multipart')

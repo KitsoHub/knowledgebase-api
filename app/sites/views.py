@@ -13,6 +13,7 @@ from core.models import HeritageSite, SiteVerificationVote
 from sites.serializers import (SiteListSerializer, SiteCreateUpdateSerializer,
                                SiteDetailSerializer, SiteVerificationVoteSerializer as VerificationVoteSerializer,
                                VoteSubmissionSerializer, AdminOverrideSerializer)
+from core.parsers import NestedMultipartParser
 
 
 class HeritageSiteViewSet(viewsets.ModelViewSet):
@@ -31,6 +32,8 @@ class HeritageSiteViewSet(viewsets.ModelViewSet):
     search_fields = ['site_name', 'description']
     ordering_fields = ['date_created', 'last_updated', 'site_name']
     ordering = ['-date_created']
+    # Use default parsers including NestedMultipartParser
+    parser_classes = (NestedMultipartParser,)
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""

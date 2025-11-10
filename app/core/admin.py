@@ -67,6 +67,24 @@ class SiteSettingsAdmin(admin.ModelAdmin):
         return False
 
 
+class SiteImagesInline(admin.TabularInline):
+    """Inline admin for displaying site images with previews"""
+    model = models.SiteImages
+    extra = 1  # Number of empty forms to display for new sites
+    readonly_fields = ('image_preview', 'uploaded_at')
+    fields = ('images', 'image_preview')
+
+    def image_preview(self, obj):
+        """Display a thumbnail preview of the image"""
+        if obj.images:
+            return format_html(
+                '<img src="{}" style="max-height: 150px; max-width: 150px; object-fit: contain;" />',
+                obj.images.url
+            )
+        return "No image uploaded"
+    image_preview.short_description = 'Image Preview'
+
+
 class VerificationInline(admin.TabularInline):
     """Inline for verifications"""
     model = models.SiteVerificationVote
@@ -78,11 +96,25 @@ class VerificationInline(admin.TabularInline):
         return False
 
 
-class MetadataInline(admin.TabularInline):
+class SiteMetadataInline(admin.StackedInline):
     """Inline for verifications"""
     model = models.SiteMetadata
     extra = 0
     can_delete = False
+
+    fieldsets = (
+        ('UN Agencies', {
+            'fields': ('unesco', 'undp', 'unicef'),
+            'classes': ('collapse',)
+        }),
+        ('Access Control', {
+            'fields': ('sensitivity_level', 'access_protocol'),
+        }),
+        ('Cultural Context', {
+            'fields': ('local_context', 'indigenous_system', 'rights', 'ip_metadata'),
+            'classes': ('collapse',)
+        }),
+    )
 
     def has_add_permission(self, request, obj):
         return False
@@ -190,7 +222,7 @@ class SiteAdmin(admin.ModelAdmin):
         })
     )
 
-    inlines = [VerificationInline]
+    inlines = [VerificationInline, SiteImagesInline,]
 
     def status_badge(self, obj):
         """Display status with color badge"""
@@ -314,9 +346,36 @@ class SiteAdmin(admin.ModelAdmin):
         )
 
 
+@admin.register(models.SiteImages)
+class SiteImagesAdmin(admin.ModelAdmin):
+    list_display = ('get_site_name', 'image_preview', 'uploaded_at')
+    list_select_related = ('site',)
+    readonly_fields = ('image_preview', 'uploaded_at')
+
+    def get_site_name(self, obj):
+        return obj.site.site_name
+    get_site_name.short_description = 'Site Name'
+    get_site_name.admin_order_field = 'site__site_name'
+
+    def image_preview(self, obj):
+        if obj.images:
+            return format_html(
+
+                '<img src="{}" style="max-height: 100px; max-width: 100px; object-fit: contain;" />',
+                obj.images.url
+
+            )
+        return "No Image"
+    image_preview.short_description = 'Image Preview'
+
+    def get_queryset(self, request):
+        """Optimize queries with select_related"""
+        qs = super().get_queryset(request)
+        return qs.select_related('site')
+
+
 admin.site.register(models.Department)
 admin.site.register(models.Onboarding)
 admin.site.register(models.OnboardingNoteImages)
 admin.site.register(models.OnboardingStep)
 admin.site.register(models.Policy)
-admin.site.register(models.SiteImages)

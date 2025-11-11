@@ -14,6 +14,7 @@ from sites.serializers import (SiteListSerializer, SiteCreateUpdateSerializer,
                                SiteDetailSerializer, SiteVerificationVoteSerializer as VerificationVoteSerializer,
                                VoteSubmissionSerializer, AdminOverrideSerializer)
 from core.parsers import NestedMultipartParser
+from rest_framework.parsers import JSONParser
 
 
 class HeritageSiteViewSet(viewsets.ModelViewSet):
@@ -33,7 +34,7 @@ class HeritageSiteViewSet(viewsets.ModelViewSet):
     ordering_fields = ['date_created', 'last_updated', 'site_name']
     ordering = ['-date_created']
     # Use default parsers including NestedMultipartParser
-    parser_classes = (NestedMultipartParser,)
+    parser_classes = (JSONParser, NestedMultipartParser,)
 
     def get_serializer_class(self):
         """Return appropriate serializer based on action"""

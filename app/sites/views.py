@@ -129,12 +129,40 @@ class VerificationVoteViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = SiteVerificationVote.objects.all()
     serializer_class = VerificationVoteSerializer
     permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
 
     def get_queryset(self):
         """Filter votes to only those the user can access"""
         user = self.request.user
-        if user.is_superuser:
+
+        # queryset = SiteVerificationVote.objects.all()
+        # # site_id = self.kwargs['pk']
+
+        # if user.is_verifier:
+        #     queryset = queryset.order_by('-created_at')
+        # return queryset
+        if user.is_verifier or user.is_superuser:
             return SiteVerificationVote.objects.all()
         return SiteVerificationVote.objects.filter(
             Q(verifier=user) | Q(site__site_settings__verifiers=user)
         ).distinct()
+
+    @action(detail=True, methods=["get"], url_path="site", permission_classes=[IsAuthenticated, IsVerifier])
+    def by_site(self, request, pk=None):
+        """
+        Return all votes for a given site, or filter by user.
+        """
+        site_id = pk
+
+        queryset = SiteVerificationVote.objects.filter(site_id=site_id)
+        # print("User:>>>>>>>>>>>>", user)
+
+        # user = request.user
+        # TODO: fetch base on individual votes
+        # Optional: filter by ?user=<id>
+        user_id = request.query_params.get("user")
+        if user_id:
+            queryset = queryset.order_by('-created_at')
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)

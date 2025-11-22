@@ -71,10 +71,15 @@ class SiteVerificationLogSerializer(serializers.ModelSerializer):
     """Serializer for audit logs"""
 
     changed_by = UserSerializer(read_only=True)
+    previous_status_display = serializers.CharField(
+        source='get_previous_status_display', read_only=True)
+
+    new_status_display = serializers.CharField(
+        source='get_new_status_display', read_only=True)
 
     class Meta:
         model = VerificationLog
-        fields = ['id', 'previous_status', 'new_status', 'changed_by',
+        fields = ['id', 'previous_status_display', 'new_status_display', 'changed_by',
                   'is_override', 'reason', 'timestamp']
         read_only_fields = ['id', 'timestamp']
 

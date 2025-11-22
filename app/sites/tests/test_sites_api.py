@@ -137,6 +137,10 @@ class VerificationFlowTest(TestCase):
             site_settings=self.site_settings
         )
 
+        # self.logs_url = reverse(
+        #     'sites:sites-verification_logs', kwargs={'pk': self.site.id})
+        self.logs_url = f'/api/sites/verification-logs/{self.site.id}/verification-logs/'
+
     def test_pending_with_one_vote(self):
         """Test that status remains 'pending' with only one vote"""
 
@@ -282,6 +286,34 @@ class VerificationFlowTest(TestCase):
                 new_status='verified'
             ).exists()
         )
+
+    def test_get_verification_log_by_site_(self):
+        """Test api call for verification by site id"""
+
+        self.client.force_authenticate(user=self.verifier1)
+        self.client.post(
+            f'/api/sites/sites/{self.site.id}/submit_verification/',
+            {'vote': 'approve'}
+        )
+
+        self.client.force_authenticate(user=self.verifier2)
+        self.client.post(
+            f'/api/sites/sites/{self.site.id}/submit_verification/',
+            {'vote': 'approve'}
+        )
+
+        self.site.refresh_from_db()
+        self.assertEqual(self.site.status, 'verified')
+        self.assertEqual(self.site.site_verification_vote.count(), 2)
+
+        self.assertTrue(VerificationLog.objects.filter(
+            site=self.site,
+        ).exists()
+        )
+
+        response = self.client.get(self.logs_url)
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertGreater(len(response.data), 0)
 
 # site images tests
 

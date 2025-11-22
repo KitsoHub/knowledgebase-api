@@ -9,10 +9,10 @@ from rest_framework.decorators import action
 from django.db.models import Q
 # from rest_framework.parsers import MultiPartParser, FormParser
 # from django_filters.rest_framework import DjangoFilterBackend
-from core.models import HeritageSite, SiteVerificationVote
+from core.models import HeritageSite, SiteVerificationVote, VerificationLog
 from sites.serializers import (SiteListSerializer, SiteCreateUpdateSerializer,
                                SiteDetailSerializer, SiteVerificationVoteSerializer as VerificationVoteSerializer,
-                               VoteSubmissionSerializer, AdminOverrideSerializer)
+                               VoteSubmissionSerializer, AdminOverrideSerializer, SiteVerificationLogSerializer)
 from core.parsers import NestedMultipartParser
 from rest_framework.parsers import JSONParser
 
@@ -163,6 +163,34 @@ class VerificationVoteViewSet(viewsets.ReadOnlyModelViewSet):
         user_id = request.query_params.get("user")
         if user_id:
             queryset = queryset.order_by('-created_at')
+
+        serializer = self.get_serializer(queryset, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
+
+
+class SiteVerificationLogViewSet(viewsets.ReadOnlyModelViewSet):
+    """ ViewSet for verification logs (read only)"""
+    queryset = VerificationLog.objects.all()
+    serializer_class = SiteVerificationLogSerializer
+    permission_classes = [IsAuthenticated]
+    authentication_classes = [TokenAuthentication]
+
+    # filter logs for verifiers and super admins
+    def get_queryset(self):
+
+        user = self.request.user
+
+        if user.is_verifier or user.is_superuser:
+            return VerificationLog.objects.all()
+        return VerificationLog.objects.filter(site__site_settings__verifiers=user).distinct()
+
+    @action(detail=True, methods=['get'], url_path='verification-logs', url_name='verification-logs',
+            permission_classes=[IsAuthenticated, IsVerifier])
+    def verification_logs(self, request, pk=None):
+        site_id = pk
+        queryset = VerificationLog.objects.filter(
+            site_id=site_id
+        )
 
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)

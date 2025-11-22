@@ -505,7 +505,7 @@ class VerificationLog(models.Model):
         ordering = ['-timestamp']
 
     def __str__(self):
-        override_text = " (OVERRIDE)" if self.is_override else ""
+        override_text = "(OVERRIDE)" if self.is_override else ""
         return f"{self.site.site_name}: {self.previous_status} → {self.new_status}{override_text}"
 
 # site images

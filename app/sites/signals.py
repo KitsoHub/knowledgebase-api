@@ -11,7 +11,7 @@ def update_site_status(sender, instance, created, **kwargs):
     if created:
         # Only check verification threshold if status is still pending
         if instance.site.status == 'pending':
-            VerificationService.check_verification_threshold(instance.site)
+            VerificationService.check_verification_threshold(instance)
 
 
 # @receiver(post_save, sender=SiteVerificationVote)
@@ -24,7 +24,6 @@ def check_verification_threshold(sender, instance, created, **kwargs):
     2. Compare counts against required_verifier_count
     3. Update site status if threshold met
     4. Create audit log entry
-    5. Send notifications
     """
     if not created:
         return  # Only process new votes

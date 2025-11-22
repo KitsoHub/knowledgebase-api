@@ -50,7 +50,7 @@ class VerificationService:
         return verification
 
     @staticmethod
-    def check_verification_threshold(site):
+    def check_verification_threshold(instance):
         """
         Check current verification status without making changes.
 
@@ -63,6 +63,10 @@ class VerificationService:
         # verifications = site.site_verification_vote.all()
         # approve_count = verifications.filter(vote='approve').count()
         # reject_count = verifications.filter(vote='reject').count()
+        site = instance.site
+        previous_status = site.status
+        new_status = None
+
         vote_counts = site.site_verification_vote.values(
             'vote').annotate(count=Count('vote'))
         approve_count = next(
@@ -71,11 +75,28 @@ class VerificationService:
             (item['count'] for item in vote_counts if item['vote'] == 'reject'), 0)
 
         if approve_count >= required:
-            site.status = 'verified'
-            site.save()
+            # site.status = 'verified'
+            # site.save()
+            new_status = 'verified'
+
         elif reject_count >= required:
-            site.status = 'rejected'
-            site.save()
+            # site.status = 'rejected'
+            # site.save()
+            new_status = 'rejected'
+
+        if new_status and new_status != previous_status:
+            with transaction.atomic():
+                site.status = new_status
+                site.save()
+
+                VerificationLog.objects.create(
+                    site=site,
+                    previous_status=previous_status,
+                    new_status=new_status,
+                    changed_by=instance.verifier,
+                    is_override=False,
+                    reason="Threshold reached"
+                )
 
     @staticmethod
     @transaction.atomic

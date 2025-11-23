@@ -264,7 +264,6 @@ class SiteCreateUpdateSerializer(serializers.ModelSerializer):
         metadata = SiteMetadata.objects.create(**metadata_data)
 
         site = HeritageSite.objects.create(metadata=metadata, **validated_data)
-
         if 'uploaded_images' in request.data and request.FILES:
 
             uploaded_images = request.FILES.getlist(
